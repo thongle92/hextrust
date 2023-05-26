@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  {{- with .Values.deployment.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if and (not .Values.autoscaling.enabled) (not .Values.kedaAutoscaling.enabled) }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
+  {{- with .Values.deployment.strategy }}
+  strategy: 
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.deployment.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "app.selectorLabels" . | nindent 8 }}
+        {{- include "app.extraLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end}}
+      {{- with .Values.deployment.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end}}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.deployment.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ include "app.fullname" . }}
+          securityContext:
+            {{- toYaml .Values.deployment.securityContext | nindent 12 }}
+          image: "{{ .Values.global.image.repository }}:{{ .Values.global.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.deployment.arguments }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            {{- toYaml .Values.deployment.ports | nindent 12 }}
+          {{- with .Values.deployment.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }} 
+          {{- end }}
+          {{- with .Values.deployment.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }} 
+          {{- end }}
+          {{- with .Values.deployment.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if (or .Values.deployment.extraEnvs .Values.deployment.env) }}
+          env:
+          {{- end }}
+          {{- with .Values.deployment.extraEnvs }}
+            {{- toYaml . | nindent 12 }} 
+          {{- end }}
+          {{- include "app.env" . | nindent 12 }}
+          {{- if (or .Values.secret .Values.vaultSecret .Values.deployment.configmapExtra) }}
+          envFrom:
+          {{- end }}
+          {{- if (or .Values.secret .Values.vaultSecret) }}
+            - secretRef:
+                name: {{ include "app.fullname" . }}
+          {{- end }}
+          {{- if .Values.deployment.configmapExtra }}
+            - configMapRef:
+                name: {{ .Values.deployment.configmapExtra }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.deployment.resources | nindent 12 }}
+          {{- if (or .Values.deployment.volumeMounts .Values.configMaps .Values.pvc.enabled) }}
+          volumeMounts:
+          {{- end }}
+
+          {{- range $cm :=  $.Values.configMaps }}
+            - name: {{ include "app.fullname" $ }}-{{ .name | required "configmap name is required"}}
+              mountPath: {{ .mountPath | required "mountPath is required"}}
+              {{- with .readOnly }}
+              readOnly: {{ . }}
+              {{- end }}
+              {{- with .subPath }}
+              subPath: {{ . }}
+              {{- end }}
+          {{- end }}
+
+           {{- if .Values.pvc.enabled }}
+            - name: {{ include "app.fullname" . }}
+              mountPath: {{ .Values.pvc.path }}
+          {{- end }}
+          {{- with .Values.deployment.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      
+      initContainers:
+        {{- if  .Values.deployment.initContainer }}
+        - name: {{ .Values.deployment.initContainer.name }}-init
+          {{- if .Values.deployment.initContainer.image.repository }}
+          image: "{{ .Values.deployment.initContainer.image.repository }}:{{ .Values.deployment.initContainer.image.tag | default .Chart.AppVersion }}"
+          {{ else }}
+          image: "{{ .Values.global.image.repository }}:{{ .Values.global.image.tag | default .Chart.AppVersion }}"
+          {{- end }}
+          {{- if .Values.deployment.initContainer.command }}
+          command:
+            {{- toYaml .Values.deployment.initContainer.command | nindent 12 }}
+          {{- end }}
+          {{- if .Values.deployment.initContainer.resources }}
+          resources:
+            {{- toYaml .Values.deployment.initContainer.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.deployment.initContainer.env }}
+          env:
+            {{- toYaml .Values.deployment.initContainer.env | nindent 12 }}
+          {{- end }}
+          {{- if .Values.deployment.configmapExtra }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.deployment.configmapExtra }}
+          {{- end }}
+        {{- end }}  
+        {{- with .Values.deployment.extraInitContainers }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.deployment.terminationGracePeriodSeconds }}
+      {{- with .Values.deployment.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if (or .Values.deployment.volumes .Values.configMap .Values.configMaps .Values.pvc.enabled) }}
+      volumes:
+      {{- end }}
+      {{- if .Values.configMaps }}
+      {{- range $cm :=  $.Values.configMaps }}
+        - name: {{ include "app.fullname" $ }}-{{ .name | required "configmap name is required"}}
+          configMap:
+            name: {{ include "app.fullname" $ }}-{{ .name | required "configmap name is required"}}
+      {{- end }}
+      {{- end }}
+      {{- if .Values.pvc.enabled }}
+        - name: {{ include "app.fullname" . }}
+          persistentVolumeClaim:
+            claimName: {{ include "app.fullname" . }}
+      {{- end }}
+      {{- with .Values.deployment.volumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

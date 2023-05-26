@@ -1,0 +1,32 @@
+{{- if .Values.kedaAutoscaling.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "app.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels: 
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "app.fullname" . }}
+    envSourceContainerName: {{ include "app.fullname" . }}
+  cooldownPeriod: {{ .Values.kedaAutoscaling.cooldownPeriod }}
+  minReplicaCount: {{ .Values.kedaAutoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.kedaAutoscaling.maxReplicas }}
+  triggers:
+    {{- if .Values.kedaAutoscaling.targetCPUUtilizationPercentage }}
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: '{{ .Values.kedaAutoscaling.targetCPUUtilizationPercentage }}'
+    {{- end }}
+    {{- if .Values.kedaAutoscaling.targetMemoryUtilizationPercentage }}
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: '{{ .Values.kedaAutoscaling.targetMemoryUtilizationPercentage }}'
+    {{- end }}
+    {{- with .Values.kedaAutoscaling.extraTriggers }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-replicas
+  namespace: { { .Release.Namespace | quote } }
+  labels:
+    { { - include "app.labels" . | nindent 4 } }
+spec:
+  serviceName: redis-replicas
+  replicas: {{ .Values.replicas.replicas }}
+  selector:
+    matchLabels:
+      { { - include "app.labels" . | nindent 4 } }
+  template:
+    metadata:
+      labels:
+        { { - include "app.labels" . | nindent 4 } }
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          ports:
+            - containerPort: {{ .Values.redis.port }}
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: redis-password
+          resources:
+            limits:
+              cpu: {{ .Values.replicas.resources.limits.cpu }}
+              memory: {{ .Values.replicas.resources.limits.memory }}
+            requests:
+              cpu: {{ .Values.replicas.resources.requests.cpu }}
+              memory: {{ .Values.replicas.resources.requests.memory }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
