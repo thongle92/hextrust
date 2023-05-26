@@ -1,0 +1,236 @@
+application:
+  global:
+    image:
+      repository: "ghcr.io/thongle92/hextrust"
+      pullPolicy: IfNotPresent
+      tag: "0.1.0"
+    imagePullSecrets: []
+    nameOverride: ""
+    fullnameOverride: ""
+    releaseVersion: ""
+    extraLabels: []
+
+  deployment:
+    ports:
+      - name: http
+        containerPort: 8000
+        protocol: TCP
+    # The update strategy to apply to the Deployment or DaemonSet
+    strategy: {}
+    # type: RollingUpdate
+    # rollingUpdate:
+    #   maxUnavailable: 0
+    #   maxSurge: 25%
+
+    ## Rollback limit
+    ##
+    annotations: {}
+
+    revisionHistoryLimit: 1
+
+    terminationGracePeriodSeconds: 60
+
+    arguments: {}
+
+    podAnnotations: {}
+
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+    # fsGroup: 2000
+
+    securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+    # We usually recommend not to specify default resources and to leave this as a conscious
+    # choice for the user. This also increases chances charts run on environments with little
+    # resources, such as Minikube. If you do want to specify resources, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+
+    nodeSelector: {}
+
+    tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "workloadGroup"
+        effect: "NoSchedule"
+      - key: "environment"
+        operator: "Equal"
+        value: "dev"
+        effect: "NoSchedule"
+
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: type
+                  operator: In
+                  values:
+                    - workload
+                - key: environment
+                  operator: In
+                  values:
+                    - dev
+
+    dnsConfig: []
+    # dnsConfig:
+    #   nameservers:
+    #     - 1.2.3.4
+    #   searches:
+    #     - test.test.com
+
+    ## Additional environment variables to set
+    # extraEnvs:
+    #   - name: FOO
+    #     valueFrom:
+    #       secretKeyRef:
+    #         key: FOO
+    #         name: secret-resource
+    configmapExtra: application-endpoints
+
+    extraEnvs:
+      - name: PG_HOST
+        value: postgresql
+      - name: PG_DB
+        value: application
+      - name: PG_USER
+        value: postgres
+      - name: PG_PWD
+        valueFrom:
+          secretKeyRef:
+            name: postgresql
+            key: postgres-password
+      - name: REDIS_HOST
+        value: redis-master
+      - name: REDIS_PWD
+        valueFrom:
+          secretKeyRef:
+            name: redis-secret
+            key: redis-password
+    # BUILDINGBLOCKS_SECURITY_CSRF_ENABLED: "true"
+
+    ## Liveness and readiness probe values
+    ## Ref: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-probes
+    ##
+    livenessProbe:
+      failureThreshold: 10
+      initialDelaySeconds: 30
+      timeoutSeconds: 10
+      httpGet:
+        path: /healthcheck
+        port: http
+    readinessProbe:
+      failureThreshold: 10
+      initialDelaySeconds: 30
+      timeoutSeconds: 10
+      httpGet:
+        path: /healthcheck
+        port: http
+
+    initContainer: {}
+
+    extraInitContainers: {}
+
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name: ""
+
+  replicaCount: 1
+
+  service:
+    nameOverride: "application-service"
+    type: ClusterIP
+    port: 8000
+    protocol: TCP
+    targetPort: http
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetMemoryUtilizationPercentage: 50
+    targetCPUUtilizationPercentage: 70
+
+postgresql:
+  replicaCount: 3
+
+  postgresql:
+    image: postgres:13.3
+    postgresUser: postgres
+    postgresDatabase: application
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 50
+    targetMemoryUtilizationPercentage: 70
+
+redis:
+  redis:
+    image: redis:latest
+    port: 6379
+    redisPassword: ""
+
+  master:
+    replicas: 1
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+  replicas:
+    replicas: 3
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 50
+
+  service:
+    type: ClusterIP
+    port: 6379

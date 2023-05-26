@@ -1,0 +1,16 @@
+apiVersion: v2
+name: application
+version: 1.0.0
+description: application helm chart
+appVersion: "1.0.0"
+
+dependencies:
+  - name: application
+    version: 0.1.0
+    repository: "file://../charts/application"
+  - name: postgresql
+    version: 0.1.0
+    repository: "file://../charts/postgresql"
+  - name: redis
+    version: 0.1.0
+    repository: "file://../charts/redis"
